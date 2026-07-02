@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Low-Power Cooling Calculator</title>
+<style>
+  :root {
+    --bg: #0f1720; --panel: #17212b; --ink: #e7edf3; --muted: #9fb0c0;
+    --line: #26333f; --good: #3fb950; --bad: #f0883e; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); padding: 24px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .field { margin-bottom: 12px; }
+  input[type=range] { width: 100%; }
+  .val { color: var(--accent); font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .load { font-size: 15px; margin: 18px 0; }
+  .load b { font-size: 20px; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .yes { color: var(--good); } .no { color: var(--bad); }
+  .w { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .note { color: var(--muted); font-size: 12.5px; }
+  .foot { margin-top: 20px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Low-Power Cooling Calculator</h1>
+  <p class="sub">Honest numbers: how much electricity each cooling approach actually needs for your room.</p>
+
+  <div class="panel">
+    <div class="grid" id="controls"></div>
+  </div>
+
+  <div class="load" id="load"></div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th>Technology</th><th>Cools room?</th><th>Power in</th><th>Reaches</th><th>Cost/hr</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" id="detail"></p>
+  </div>
+
+  <p class="foot">
+    <b>Bottom line:</b> cooling a room means pumping heat out of it, and the
+    electricity needed scales with the heat you move. Fan-level watts can't do
+    AC-level room cooling — but <b>spot cooling</b> (cool the person, not the
+    room) gets you close to fan power with real comfort.
+  </p>
+</div>
+
+<script>
+// --- physics, mirrored from cooling_calc.py -------------------------------
+const BTU_PER_W = 3.412142, BTU_PER_TON = 12000;
+const ENVELOPE = 1.35, PERSON_BTU = 230;
+const wToBtu = w => w * BTU_PER_W, btuToW = b => b / BTU_PER_W;
+const cToF = c => c * 9 / 5 + 32;
+
+function wetBulb(t, rh) {
+  rh = Math.max(1, Math.min(100, rh));
+  return t * Math.atan(0.151977 * Math.sqrt(rh + 8.313659))
+    + Math.atan(t + rh) - Math.atan(rh - 1.676331)
+    + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;
+}
+
+function load(s) {
+  const d = Math.max(0, s.outdoor - s.target);
+  const env = s.area * ENVELOPE * d * s.sun;
+  return env + s.occupants * PERSON_BTU + wToBtu(s.appliances);
+}
+
+function techs(s) {
+  const L = load(s);
+  const out = [];
+  // fan
+  out.push({ name: "Table fan", cool: false, w: 60, reach: s.outdoor,
+    note: "Moves air only — removes no heat. Feels ~2-3°C cooler on skin. Room temp unchanged." });
+  // evaporative
+  const twb = wetBulb(s.outdoor, s.humidity);
+  const supply = s.outdoor - 0.85 * (s.outdoor - twb);
+  const drop = s.outdoor - supply, humid = s.humidity > 55;
+  out.push({ name: "Evaporative cooler", cool: drop > 1 && !humid, w: 120,
+    reach: supply,
+    note: `Wet-bulb floor ≈ ${twb.toFixed(1)}°C, best air ≈ ${supply.toFixed(1)}°C (${drop.toFixed(1)}°C drop). `
+      + (humid ? "Humidity too high — barely works." : "Good in dry climates; needs water + open window.") });
+  // cheap AC
+  out.push({ name: "Cheap window AC", cool: true, w: btuToW(L) / 2.9, reach: s.target,
+    note: `Removes ${Math.round(L).toLocaleString()} BTU/hr at COP 2.9. Reaches setpoint anywhere.` });
+  // inverter
+  out.push({ name: "Inverter mini-split", cool: true, w: btuToW(L) / 4.5 + 25, reach: s.target,
+    note: `Removes ${Math.round(L).toLocaleString()} BTU/hr at COP 4.5. Best real AC — ~half a cheap unit's power.` });
+  // spot
+  const effTarget = s.target + 3, zf = Math.min(1, 40 / s.area);
+  const dz = Math.max(0, s.outdoor - effTarget);
+  const zoneLoad = s.area * ENVELOPE * dz * s.sun * zf + s.occupants * PERSON_BTU;
+  out.push({ name: "Spot cooler (zone + airflow)", cool: false,
+    w: btuToW(zoneLoad) / 4.0 + 20, reach: effTarget,
+    note: `Cools a 40 sqft zone + airflow (~3°C comfort boost): occupant feels ${s.target.toFixed(0)}°C while zone air ~${effTarget.toFixed(0)}°C. Removes ${Math.round(zoneLoad).toLocaleString()} BTU/hr. Near fan power!` });
+  return { L, out };
+}
+
+// --- UI -------------------------------------------------------------------
+const S = { area: 300, outdoor: 38, humidity: 45, target: 25, occupants: 2, appliances: 200, sun: 1.1, rate: 0.15 };
+const FIELDS = [
+  ["area", "Room area (sqft)", 100, 600, 10],
+  ["outdoor", "Outdoor temp (°C)", 25, 48, 1],
+  ["humidity", "Relative humidity (%)", 10, 95, 1],
+  ["target", "Target indoor (°C)", 18, 28, 1],
+  ["occupants", "Occupants", 1, 5, 1],
+  ["appliances", "Appliance load (W)", 0, 800, 10],
+  ["sun", "Sun factor", 0.8, 1.3, 0.05],
+  ["rate", "Electricity ($/kWh)", 0.05, 0.5, 0.01],
+];
+
+const controls = document.getElementById("controls");
+FIELDS.forEach(([k, label, min, max, step]) => {
+  const d = document.createElement("div"); d.className = "field";
+  d.innerHTML = `<label>${label}: <span class="val" id="v_${k}"></span></label>
+    <input type="range" id="i_${k}" min="${min}" max="${max}" step="${step}" value="${S[k]}">`;
+  controls.appendChild(d);
+  d.querySelector("input").addEventListener("input", e => { S[k] = parseFloat(e.target.value); render(); });
+});
+
+function render() {
+  FIELDS.forEach(([k]) => document.getElementById("v_" + k).textContent = S[k]);
+  const { L, out } = techs(S);
+  document.getElementById("load").innerHTML =
+    `Heat to remove for the whole room: <b>${Math.round(L).toLocaleString()} BTU/hr</b> (${(L / BTU_PER_TON).toFixed(2)} ton)`;
+  document.getElementById("rows").innerHTML = out.map(t => `
+    <tr>
+      <td>${t.name}</td>
+      <td class="${t.cool ? "yes" : "no"}">${t.cool ? "yes" : "no"}</td>
+      <td class="w">${Math.round(t.w)} W</td>
+      <td>${t.reach.toFixed(1)}°C (${Math.round(cToF(t.reach))}°F)</td>
+      <td>$${(t.w / 1000 * S.rate).toFixed(3)}</td>
+    </tr>`).join("");
+  document.getElementById("detail").innerHTML =
+    out.map(t => `<b>${t.name}:</b> ${t.note}`).join("<br>");
+}
+render();
+</script>
+</body>
+</html>
