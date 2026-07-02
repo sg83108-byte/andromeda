@@ -89,9 +89,12 @@ class Room:
     appliance_watts: float = 200.0          # TV, chargers, router, etc.
     # Sun exposure: 0.8 shaded ... 1.0 average ... 1.3 lots of afternoon sun.
     sun_factor: float = 1.1
-    # Spot cooling: the small zone actually cooled (e.g. the bed), not the
+    # Spot cooling: the small zone cooled per pipe (e.g. the bed), not the
     # whole 300 sqft. This is the trick behind low-power comfort.
     spot_zone_sqft: float = 40.0
+    # Number of independent steerable nozzles ("pipes"). More pipes cover
+    # more occupants/zones but cost more power.
+    pipes: int = 1
 
 
 @dataclass
@@ -239,10 +242,12 @@ def evaluate_spot(room: Room, tech: Technology, load_btu_hr: float) -> Result:
     """
     airflow_comfort_offset_c = 3.0
     effective_target_c = room.target_temp_c + airflow_comfort_offset_c
-    # Scale the envelope load down to the occupied zone; keep full occupant
-    # load (the people are all in the zone). Recompute against the warmer,
+    pipes = max(1, room.pipes)
+    # Total conditioned zone = per-pipe zone x number of pipes, capped at the
+    # whole room. Recompute the envelope share against the warmer,
     # airflow-assisted setpoint.
-    zone_fraction = min(1.0, room.spot_zone_sqft / room.area_sqft)
+    total_zone_sqft = min(room.area_sqft, room.spot_zone_sqft * pipes)
+    zone_fraction = total_zone_sqft / room.area_sqft
     delta_c = max(0.0, room.outdoor_temp_c - effective_target_c)
     envelope = (
         room.area_sqft * _ENVELOPE_BTU_PER_SQFT_PER_C
@@ -251,7 +256,9 @@ def evaluate_spot(room: Room, tech: Technology, load_btu_hr: float) -> Result:
     people = room.occupants * _SENSIBLE_PER_PERSON_BTU
     zone_load = envelope + people
     cooling_watts = btu_hr_to_watts(zone_load)
-    input_watts = cooling_watts / tech.cop + tech.fan_watts
+    # One blower per pipe; a single compressor sized to the total zone load.
+    blower_watts = tech.fan_watts * pipes
+    input_watts = cooling_watts / tech.cop + blower_watts
     return Result(
         technology=tech.name,
         can_cool_room=False,  # by design it cools the zone, not the room
@@ -259,10 +266,10 @@ def evaluate_spot(room: Room, tech: Technology, load_btu_hr: float) -> Result:
         delivered_cooling_btu_hr=zone_load,
         achievable_indoor_temp_c=effective_target_c,
         notes=(
-            f"Cools a {room.spot_zone_sqft:.0f} sqft zone + directed airflow "
-            f"(~{airflow_comfort_offset_c:.0f}°C comfort boost), so the "
-            f"occupant feels like {room.target_temp_c:.0f}°C while the zone "
-            f"air sits near {effective_target_c:.0f}°C. Removes "
+            f"{pipes} pipe(s) cooling ~{total_zone_sqft:.0f} sqft total + "
+            f"directed airflow (~{airflow_comfort_offset_c:.0f}°C comfort "
+            f"boost), so occupants feel like {room.target_temp_c:.0f}°C while "
+            f"zone air sits near {effective_target_c:.0f}°C. Removes "
             f"{zone_load:,.0f} BTU/hr at COP {tech.cop:.1f}. Rest of the room "
             "stays warm — that's the trade that cuts the power."
         ),
@@ -382,6 +389,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--occupants", type=int, default=2, help="number of people")
     p.add_argument("--appliances", type=float, default=200.0, help="appliance load, W")
     p.add_argument("--sun", type=float, default=1.1, help="sun factor 0.8..1.3")
+    p.add_argument("--pipes", type=int, default=1, help="spot-cooler nozzles")
     p.add_argument("--rate", type=float, default=0.15, help="electricity $/kWh")
     p.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     return p
@@ -398,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         occupants=args.occupants,
         appliance_watts=args.appliances,
         sun_factor=args.sun,
+        pipes=args.pipes,
     )
     report = analyze(room, electricity_rate_per_kwh=args.rate)
     if args.json:
