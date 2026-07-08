@@ -1,0 +1,46 @@
+.ship {
+  position: relative;
+  width: 7rem;
+  height: 3.5rem;
+  transition: transform 1s ease-out;
+}
+
+.ship__body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 6px rgba(180, 200, 255, 0.6));
+}
+
+.ship__glow {
+  position: absolute;
+  left: -1.5rem;
+  top: 50%;
+  width: 3rem;
+  height: 1.6rem;
+  transform: translateY(-50%) scaleX(0.3);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(124, 201, 255, 0.9) 0%,
+    rgba(124, 201, 255, 0.4) 45%,
+    rgba(124, 201, 255, 0) 75%
+  );
+  filter: blur(4px);
+  opacity: 0.3;
+  transition:
+    transform var(--phase-duration, 4s) ease-in-out,
+    opacity var(--phase-duration, 4s) ease-in-out;
+}
+
+.ship.phase-inhale .ship__glow,
+.ship.phase-hold1 .ship__glow {
+  transform: translateY(-50%) scaleX(1);
+  opacity: 1;
+}
+
+.ship.phase-exhale .ship__glow,
+.ship.phase-hold2 .ship__glow {
+  transform: translateY(-50%) scaleX(0.3);
+  opacity: 0.3;
+}

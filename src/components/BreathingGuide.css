@@ -1,0 +1,41 @@
+.breathing-guide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.breathing-guide__circle {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 201, 255, 0.55) 0%, rgba(124, 201, 255, 0.1) 70%);
+  box-shadow: 0 0 30px rgba(124, 201, 255, 0.4);
+  transform: scale(0.6);
+  transition: transform var(--phase-duration, 4s) ease-in-out;
+}
+
+.breathing-guide__circle.phase-inhale,
+.breathing-guide__circle.phase-hold1 {
+  transform: scale(1.15);
+}
+
+.breathing-guide__circle.phase-exhale,
+.breathing-guide__circle.phase-hold2 {
+  transform: scale(0.6);
+}
+
+.breathing-guide__text {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+  min-height: 2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing-guide__circle {
+    transition-duration: 0.4s;
+  }
+}

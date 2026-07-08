@@ -1,0 +1,61 @@
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.controls__button {
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 232, 255, 0.25);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.controls__button:hover {
+  background: rgba(232, 232, 255, 0.08);
+}
+
+.controls__button:focus-visible {
+  outline: 2px solid #7cc9ff;
+  outline-offset: 2px;
+}
+
+.controls__button--primary {
+  background: linear-gradient(90deg, #7cc9ff, #a9b3ff);
+  color: #0b0e23;
+  border: none;
+  font-weight: 600;
+}
+
+.controls__button--primary:hover {
+  filter: brightness(1.08);
+  background: linear-gradient(90deg, #7cc9ff, #a9b3ff);
+}
+
+.controls__field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.controls__field select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #131735;
+  color: var(--color-text);
+  border: 1px solid rgba(232, 232, 255, 0.25);
+}
+
+.controls__field select:focus-visible {
+  outline: 2px solid #7cc9ff;
+  outline-offset: 2px;
+}

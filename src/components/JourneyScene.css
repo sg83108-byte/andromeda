@@ -1,0 +1,21 @@
+.journey-scene {
+  position: relative;
+  width: 100%;
+  height: min(60vh, 24rem);
+  border-radius: 1rem;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0b0e23 0%, #131735 100%);
+  border: 1px solid rgba(232, 232, 255, 0.08);
+}
+
+.journey-scene__track {
+  position: absolute;
+  left: 4%;
+  right: 22%;
+  top: 55%;
+  transform: translateY(-50%);
+}
+
+.journey-scene__track .ship {
+  transform: translateX(calc(var(--progress, 0) * 100%));
+}
